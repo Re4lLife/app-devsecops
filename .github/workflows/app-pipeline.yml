@@ -1,0 +1,146 @@
+name: 2. Application Pipeline
+
+on:
+  push:
+    paths:
+      - 'app/**'
+  workflow_dispatch:
+
+env:
+  ECR_REGISTRY: 437797167825.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: vulnerable-app
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  security-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./app
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # SAST
+      - name: Run SonarQube SAST Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # SCA
+      - name: Run Snyk Dependency Scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --json-file-output=snyk-report.json --severity-threshold=high
+        continue-on-error: true
+
+      # Build image once - reuse for Trivy and deploy
+      - name: Build Container Image
+        run: docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+
+      # Container scan
+      - name: Run Trivy Container Scan
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image \
+            --format json \
+            --output trivy-image-report.json \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG || true
+
+      # IaC scan (report only)
+      - name: Run Checkov IaC Scan
+        run: |
+          docker run --rm -v ${{ github.workspace }}/terraform:/tf \
+            bridgecrew/checkov -d /tf --output json > checkov-report.json || true
+
+      # DAST - note port 3000, not 5000
+      - name: Start MySQL for DAST
+        run: |
+          docker network create appnet
+          docker run -d --network appnet --name mysql \
+            -e MYSQL_ROOT_PASSWORD=test \
+            -e MYSQL_DATABASE=appdb \
+            -e MYSQL_USER=admin \
+            -e MYSQL_PASSWORD=test \
+            mysql:8.0
+          sleep 20
+
+      - name: Start App for DAST
+        run: |
+          docker run -d --network appnet -p 3000:3000 --name local-app \
+            -e DB_HOST=mysql \
+            -e DB_USER=admin \
+            -e DB_PASSWORD=test \
+            -e DB_NAME=appdb \
+            -e DB_PORT=3306 \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          sleep 15
+
+      - name: Run OWASP ZAP DAST Scan
+        run: |
+          docker run --rm --network appnet \
+            -v $(pwd):/zap/wrk/:rw \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://local-app:3000 \
+            -J zap-report.json || true
+
+      # Push to ECR
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push Image to ECR
+        run: |
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                     $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+
+      # Upload all reports to DefectDojo
+      - name: Upload Snyk to DefectDojo
+        uses: ivanamat/defectdojo-import-scan@v1
+        with:
+          token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
+          defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
+          file: snyk-report.json        # path relative to repo root after working-dir
+          scan_type: "Snyk Scan"
+          engagement: 1
+
+      - name: Upload Trivy to DefectDojo
+        uses: ivanamat/defectdojo-import-scan@v1
+        with:
+          token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
+          defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
+          file: trivy-image-report.json
+          scan_type: "Trivy Scan"
+          engagement: 1
+
+      - name: Upload Checkov to DefectDojo
+        uses: ivanamat/defectdojo-import-scan@v1
+        with:
+          token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
+          defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
+          file: checkov-report.json
+          scan_type: "Checkov Scan"
+          engagement: 1
+
+      - name: Upload ZAP to DefectDojo
+        uses: ivanamat/defectdojo-import-scan@v1
+        with:
+          token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
+          defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
+          file: zap-report.json
+          scan_type: "ZAP Scan"
+          engagement: 1

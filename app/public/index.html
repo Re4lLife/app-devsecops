@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>National Registry Dashboard</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: #0f172a; margin: 0; padding: 2rem; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 900px; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        .panel { background: white; padding: 2rem; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        h2 { margin-top: 0; font-size: 1.25rem; font-weight: 600; color: #1e293b; margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.375rem; font-size: 0.875rem; font-weight: 500; color: #475569; }
+        input { width: 100%; padding: 0.625rem; margin-bottom: 1.25rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 0.875rem; }
+        input:focus { outline: 2px solid #0f172a; border-color: transparent; }
+        button { width: 100%; padding: 0.75rem; background: #0f172a; color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; font-size: 0.875rem; }
+        button:hover { background: #1e293b; }
+        .list-container { max-height: 400px; overflow-y: auto; }
+        .record-card { padding: 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; }
+        .record-card:last-child { border-bottom: none; }
+        .record-title { font-weight: 600; color: #1e293b; }
+        .record-meta { color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Input Form Panel -->
+    <div class="panel">
+        <h2>Citizen Registration</h2>
+        <form id="spaForm">
+            <label>Full Name</label>
+            <input type="text" id="name" required>
+            
+            <label>Country</label>
+            <input type="text" id="country" required>
+            
+            <label>National Identity Number (NIN)</label>
+            <input type="text" id="nin" required>
+            
+            <label>State</label>
+            <input type="text" id="state" required>
+            
+            <button type="submit">Submit Record</button>
+        </form>
+    </div>
+
+    <!-- Live Data View Panel (Updates without reloading) -->
+    <div class="panel">
+        <h2>Registered Database Records</h2>
+        <div class="list-container" id="recordsList">
+            <!-- Dynamic items injector -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // Fetch and display records dynamically when loading the page
+    async function loadRecords() {
+        try {
+            const response = await fetch('/api/citizens');
+            const records = await response.json();
+            const list = document.getElementById('recordsList');
+            list.innerHTML = '';
+
+            if(records.length === 0) {
+                list.innerHTML = '<div style="color: #94a3b8; font-size: 0.875rem;">No records found in RDS database.</div>';
+                return;
+            }
+
+            records.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'record-card';
+                div.innerHTML = `
+                    <div class="record-title">${item.name} (${item.state}, ${item.country})</div>
+                    <div>NIN: ${item.nin}</div>
+                    <div class="record-meta">Recorded on: ${item.created_at || 'N/A'}</div>
+                `;
+                list.appendChild(div);
+            });
+        } catch (err) {
+            console.error("Error loading records:", err);
+        }
+    }
+
+    // Intercept form submission to process via AJAX asynchronously (SPA Behavior)
+    document.getElementById('spaForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const payload = {
+            name: document.getElementById('name').value,
+            country: document.getElementById('country').value,
+            nin: document.getElementById('nin').value,
+            state: document.getElementById('state').value
+        };
+
+        try {
+            const response = await fetch('/api/citizens', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                document.getElementById('spaForm').reset();
+                await loadRecords(); // Refresh lists view without reloading entire webpage
+            } else {
+                alert('Database write failed');
+            }
+        } catch (error) {
+            console.error('Error submitting payload:', error);
+        }
+    });
+
+    // Initial feed load
+    loadRecords();
+</script>
+</body>
+</html>
