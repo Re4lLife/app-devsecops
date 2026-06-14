@@ -117,7 +117,7 @@ jobs:
         with:
           token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
           defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
-          file: snyk-report.json        # path relative to repo root after working-dir
+          file: app/snyk-report.json        # path relative to repo root after working-dir
           scan_type: "Snyk Scan"
           engagement: 1
 
@@ -126,7 +126,7 @@ jobs:
         with:
           token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
           defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
-          file: trivy-image-report.json
+          file: app/trivy-image-report.json
           scan_type: "Trivy Scan"
           engagement: 1
 
@@ -144,6 +144,6 @@ jobs:
         with:
           token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
           defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
-          file: zap-report.json
+          file: app/zap-report.json
           scan_type: "ZAP Scan"
           engagement: 1
