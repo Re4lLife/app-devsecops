@@ -113,37 +113,33 @@ jobs:
 
       # Upload all reports to DefectDojo
       - name: Upload Snyk to DefectDojo
-        uses: ivanamat/defectdojo-import-scan@v1
-        with:
-          token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
-          defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
-          file: app/snyk-report.json        # path relative to repo root after working-dir
-          scan_type: "Snyk Scan"
-          engagement: 1
+        run: |
+          curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+            -F "scan_type=Snyk Scan" \
+            -F "engagement=1" \
+            -F "file=@${{ github.workspace }}/app/snyk-report.json" || true
 
       - name: Upload Trivy to DefectDojo
-        uses: ivanamat/defectdojo-import-scan@v1
-        with:
-          token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
-          defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
-          file: app/trivy-image-report.json
-          scan_type: "Trivy Scan"
-          engagement: 1
+        run: |
+          curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+            -F "scan_type=Trivy Scan" \
+            -F "engagement=1" \
+            -F "file=@${{ github.workspace }}/app/trivy-image-report.json" || true
 
       - name: Upload Checkov to DefectDojo
-        uses: ivanamat/defectdojo-import-scan@v1
-        with:
-          token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
-          defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
-          file: checkov-report.json
-          scan_type: "Checkov Scan"
-          engagement: 1
+        run: |
+          curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+            -F "scan_type=Checkov Scan" \
+            -F "engagement=1" \
+            -F "file=@${{ github.workspace }}/checkov-report.json" || true
 
       - name: Upload ZAP to DefectDojo
-        uses: ivanamat/defectdojo-import-scan@v1
-        with:
-          token: ${{ secrets.DEFECTDOJO_API_TOKEN }}
-          defectdojo_url: ${{ secrets.DEFECTDOJO_URL }}
-          file: app/zap-report.json
-          scan_type: "ZAP Scan"
-          engagement: 1
+        run: |
+          curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+            -F "scan_type=ZAP Scan" \
+            -F "engagement=1" \
+            -F "file=@${{ github.workspace }}/app/zap-report.json" || true
