@@ -27,7 +27,7 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@master
         continue-on-error: true
         with:
-          projectBaseDir: .
+          projectBaseDir: ${{ github.workspace }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
