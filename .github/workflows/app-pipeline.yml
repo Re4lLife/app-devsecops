@@ -41,6 +41,10 @@ jobs:
           args: --json-file-output=${{ github.workspace }}/app/snyk-report.json --severity-threshold=high
         continue-on-error: true
 
+      - name: Verify scan outputs
+        run: |
+          echo "=== Snyk ===" && cat ${{ github.workspace }}/app/snyk-report.json | head -5 || echo "EMPTY/MISSING"
+    
       # Build image once - reuse for Trivy and deploy
       - name: Build Container Image
         run: docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
@@ -55,6 +59,10 @@ jobs:
             --output ${{ github.workspace }}/app/trivy-image-report.json \
             $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG || true
 
+      - name: Verify scan outputs
+        run: |
+          echo "=== Trivy ===" && cat ${{ github.workspace }}/app/trivy-image-report.json | head -5 || echo "EMPTY/MISSING"
+    
       # IaC scan (report only)
       - name: Run Checkov IaC Scan
         run: |
@@ -92,6 +100,10 @@ jobs:
             zap-baseline.py -t http://local-app:3000 \
             -J zap-report.json || true
 
+      - name: Verify scan outputs
+        run: |
+          echo "=== ZAP ===" && cat ${{ github.workspace }}/app/zap-report.json | head -5 || echo "EMPTY/MISSING"
+
       # Push to ECR
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -124,7 +136,7 @@ jobs:
             -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
             -F "scan_type=Snyk Scan" \
             -F "engagement=1" \
-            -F "file=@${{ github.workspace }}/app/snyk-report.json"
+            -F "file=@/home/runner/work/app-devsecops/app-devsecops/app/snyk-report.json" || true
 
       - name: Upload Trivy to DefectDojo
         run: |
