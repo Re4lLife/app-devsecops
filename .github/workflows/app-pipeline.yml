@@ -25,6 +25,10 @@ jobs:
       # SAST
       - name: Run SonarQube SAST Scan
         uses: SonarSource/sonarqube-scan-action@master
+        with:
+          projectBaseDir: .
+          args: >
+            -Dproject.settings=.sonarqube/sonar-project.properties
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
