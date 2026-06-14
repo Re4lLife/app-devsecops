@@ -113,8 +113,8 @@ jobs:
 
       - name: Debug - Global Runner Search
         run: |
-          echo "=== Searching Entire Runner Filesystem for Reports ==="
-          sudo find / -type f \( -name "*report*" -o -name "*.json" \) 2>/dev/null -exec ls -lh {} \;
+          echo "=== Searching Entire Runner Filesystem for Exact Reports ==="
+          sudo find / -type f \( -name "snyk-report.json" -o -name "trivy-image-report.json" -o -name "zap-report.json" -o -name "checkov-report.json" \) 2>/dev/null -exec ls -lh {} \;
 
 
       # Upload all reports to DefectDojo
