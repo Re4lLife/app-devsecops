@@ -111,6 +111,24 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
 
+      - name: Debug - List all report files
+        run: |
+          echo "=== App folder ==="
+          ls -la ${{ github.workspace }}/app/
+
+          echo "=== Snyk report ==="
+          wc -c ${{ github.workspace }}/app/snyk-report.json || echo "NOT FOUND"
+
+          echo "=== Trivy report ==="
+          wc -c ${{ github.workspace }}/app/trivy-image-report.json || echo "NOT FOUND"
+
+          echo "=== ZAP report ==="
+          wc -c ${{ github.workspace }}/app/zap-report.json || echo "NOT FOUND"
+
+          echo "=== Checkov report ==="
+          wc -c ${{ github.workspace }}/checkov-report.json || echo "NOT FOUND"
+
+
       # Upload all reports to DefectDojo
       - name: Upload Snyk to DefectDojo
         run: |
@@ -118,7 +136,7 @@ jobs:
             -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
             -F "scan_type=Snyk Scan" \
             -F "engagement=1" \
-            -F "file=@${{ github.workspace }}/app/snyk-report.json" || true
+            -F "file=@${{ github.workspace }}/app/snyk-report.json"
 
       - name: Upload Trivy to DefectDojo
         run: |
@@ -126,7 +144,7 @@ jobs:
             -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
             -F "scan_type=Trivy Scan" \
             -F "engagement=1" \
-            -F "file=@${{ github.workspace }}/app/trivy-image-report.json" || true
+            -F "file=@${{ github.workspace }}/app/trivy-image-report.json"
 
       - name: Upload Checkov to DefectDojo
         run: |
@@ -134,7 +152,7 @@ jobs:
             -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
             -F "scan_type=Checkov Scan" \
             -F "engagement=1" \
-            -F "file=@${{ github.workspace }}/checkov-report.json" || true
+            -F "file=@${{ github.workspace }}/checkov-report.json"
 
       - name: Upload ZAP to DefectDojo
         run: |
@@ -142,4 +160,4 @@ jobs:
             -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
             -F "scan_type=ZAP Scan" \
             -F "engagement=1" \
-            -F "file=@${{ github.workspace }}/app/zap-report.json" || true
+            -F "file=@${{ github.workspace }}/app/zap-report.json"
