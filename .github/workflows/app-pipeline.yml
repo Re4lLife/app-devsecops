@@ -26,16 +26,11 @@ jobs:
       - name: Run SonarQube SAST Scan
         uses: SonarSource/sonarqube-scan-action@master
         continue-on-error: true
+        with:
+          projectBaseDir: .
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        with:
-          projectBaseDir: app
-          args: >
-            -Dsonar.projectKey=re4llife_app-devsecops
-            -Dsonar.organization=re4llife
-            -Dsonar.sources=.
-            -Dsonar.exclusions=node_modules/**
 
       # SCA
       - name: Run Snyk Dependency Scan
