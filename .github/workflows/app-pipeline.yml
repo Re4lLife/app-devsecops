@@ -38,7 +38,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args: --json-file-output=snyk-report.json --severity-threshold=high
+          args: --json-file-output=${{ github.workspace }}/app/snyk-report.json --severity-threshold=high
         continue-on-error: true
 
       # Build image once - reuse for Trivy and deploy
@@ -52,14 +52,14 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy image \
             --format json \
-            --output trivy-image-report.json \
+            --output ${{ github.workspace }}/app/trivy-image-report.json \
             $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG || true
 
       # IaC scan (report only)
       - name: Run Checkov IaC Scan
         run: |
           docker run --rm -v ${{ github.workspace }}/terraform:/tf \
-            bridgecrew/checkov -d /tf --output json > checkov-report.json || true
+            bridgecrew/checkov -d /tf --output json > ${{ github.workspace }}/app/checkov-report.json || true
 
       # DAST - note port 3000, not 5000
       - name: Start MySQL for DAST
@@ -87,7 +87,7 @@ jobs:
       - name: Run OWASP ZAP DAST Scan
         run: |
           docker run --rm --network appnet \
-            -v $(pwd):/zap/wrk/:rw \
+            -v ${{ github.workspace }}/app:/zap/wrk/:rw \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t http://local-app:3000 \
             -J zap-report.json || true
