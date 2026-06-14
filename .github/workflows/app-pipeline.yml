@@ -111,22 +111,10 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
 
-      - name: Debug - List all report files
+      - name: Debug - Global Runner Search
         run: |
-          echo "=== App folder ==="
-          ls -la ${{ github.workspace }}/app/
-
-          echo "=== Snyk report ==="
-          wc -c ${{ github.workspace }}/app/snyk-report.json || echo "NOT FOUND"
-
-          echo "=== Trivy report ==="
-          wc -c ${{ github.workspace }}/app/trivy-image-report.json || echo "NOT FOUND"
-
-          echo "=== ZAP report ==="
-          wc -c ${{ github.workspace }}/app/zap-report.json || echo "NOT FOUND"
-
-          echo "=== Checkov report ==="
-          wc -c ${{ github.workspace }}/checkov-report.json || echo "NOT FOUND"
+          echo "=== Searching Entire Runner Filesystem for Reports ==="
+          sudo find / -type f \( -name "*report*" -o -name "*.json" \) 2>/dev/null -exec ls -lh {} \;
 
 
       # Upload all reports to DefectDojo
