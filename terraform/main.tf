@@ -20,17 +20,6 @@ terraform {
   }
 }
 
-# ECR Repository
-resource "aws_ecr_repository" "app" {
-  name                 = "vulnerable-app"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  force_delete = true  # ensures it's deleted on terraform destroy
-}
 
 # ─── VPC ────────────────────────────────────────────────────────────────────
 
