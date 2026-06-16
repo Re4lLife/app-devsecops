@@ -32,18 +32,15 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      # SCA
+      # SCA - Snyk 
       - name: Run Snyk Dependency Scan
-        uses: snyk/actions/node@master
+        working-directory: ${{ github.workspace }}/app
+        run: |
+          npm install
+          npm install -g snyk
+          snyk test --json > ${{ github.workspace }}/snyk-report.json || true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --json-file-output=${{ github.workspace }}/app/snyk-report.json --severity-threshold=high
-        continue-on-error: true
-
-      - name: Verify scan outputs
-        run: |
-          echo "=== Snyk ===" && cat ${{ github.workspace }}/app/snyk-report.json | head -5 || echo "EMPTY/MISSING"
     
       # Build image once - reuse for Trivy and deploy
       - name: Build Container Image
@@ -51,13 +48,12 @@ jobs:
 
       # Container scan
       - name: Run Trivy Container Scan
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy image \
-            --format json \
-            --output ${{ github.workspace }}/app/trivy-image-report.json \
-            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG || true
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          format: json
+          output: trivy-image-report.json
+          exit-code: 0
 
       - name: Verify scan outputs
         run: |
@@ -65,11 +61,14 @@ jobs:
     
       # IaC scan (report only)
       - name: Run Checkov IaC Scan
+        working-directory: ${{ github.workspace }}
         run: |
-          docker run --rm -v ${{ github.workspace }}/terraform:/tf \
-            bridgecrew/checkov -d /tf --output json > ${{ github.workspace }}/app/checkov-report.json || true
+          docker run --rm \
+          -v ${{ github.workspace }}/terraform:/tf \
+          bridgecrew/checkov -d /tf --output json \
+          > ${{ github.workspace }}/checkov-report.json || true
 
-      # DAST - note port 3000, not 5000
+      # DAST - note port 3000
       - name: Start MySQL for DAST
         run: |
           docker network create appnet
@@ -92,13 +91,16 @@ jobs:
             $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           sleep 15
 
+      # ZAP - mount workspace root, report lands at workspace root
       - name: Run OWASP ZAP DAST Scan
+        working-directory: ${{ github.workspace }}
         run: |
           docker run --rm --network appnet \
-            -v ${{ github.workspace }}/app:/zap/wrk/:rw \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://local-app:3000 \
-            -J zap-report.json || true
+          -v ${{ github.workspace }}:/zap/wrk/:rw \
+          ghcr.io/zaproxy/zaproxy:stable \
+          zap-baseline.py -t http://local-app:3000 \
+          -J zap-report.json || true
+
 
       - name: Verify scan outputs
         run: |
@@ -123,41 +125,50 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
 
-      - name: Debug - Global Runner Search
+      # Debug - all reports should be at workspace root
+      - name: Debug - List all report files
+        working-directory: ${{ github.workspace }}
         run: |
-          echo "=== Searching Entire Runner Filesystem for Exact Reports ==="
-          sudo find / -type f \( -name "snyk-report.json" -o -name "trivy-image-report.json" -o -name "zap-report.json" -o -name "checkov-report.json" \) 2>/dev/null -exec ls -lh {} \;
+          ls -la ${{ github.workspace }}/
+          wc -c ${{ github.workspace }}/snyk-report.json || echo "Snyk NOT FOUND"
+          wc -c ${{ github.workspace }}/trivy-image-report.json || echo "Trivy NOT FOUND"
+          wc -c ${{ github.workspace }}/zap-report.json || echo "ZAP NOT FOUND"
+          wc -c ${{ github.workspace }}/checkov-report.json || echo "Checkov NOT FOUND"
 
 
-      # Upload all reports to DefectDojo
+      # Uploads - all from workspace root
       - name: Upload Snyk to DefectDojo
+        working-directory: ${{ github.workspace }}
         run: |
           curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
-            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
-            -F "scan_type=Snyk Scan" \
-            -F "engagement=1" \
-            -F "file=@/home/runner/work/app-devsecops/app-devsecops/app/snyk-report.json" || true
+          -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+          -F "scan_type=Snyk Scan" \
+          -F "engagement=1" \
+          -F "file=@${{ github.workspace }}/snyk-report.json" || true
 
       - name: Upload Trivy to DefectDojo
+        working-directory: ${{ github.workspace }}
         run: |
           curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
-            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
-            -F "scan_type=Trivy Scan" \
-            -F "engagement=1" \
-            -F "file=@${{ github.workspace }}/app/trivy-image-report.json"
+          -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+          -F "scan_type=Trivy Scan" \
+          -F "engagement=1" \
+          -F "file=@${{ github.workspace }}/trivy-image-report.json" || true
 
       - name: Upload Checkov to DefectDojo
+        working-directory: ${{ github.workspace }}
         run: |
           curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
-            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
-            -F "scan_type=Checkov Scan" \
-            -F "engagement=1" \
-            -F "file=@${{ github.workspace }}/checkov-report.json"
+          -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+          -F "scan_type=Checkov Scan" \
+          -F "engagement=1" \
+          -F "file=@${{ github.workspace }}/checkov-report.json" || true
 
       - name: Upload ZAP to DefectDojo
+        working-directory: ${{ github.workspace }}
         run: |
           curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
-            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
-            -F "scan_type=ZAP Scan" \
-            -F "engagement=1" \
-            -F "file=@${{ github.workspace }}/app/zap-report.json"
+          -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+          -F "scan_type=ZAP Scan" \
+          -F "engagement=1" \
+          -F "file=@${{ github.workspace }}/zap-report.json" || true
