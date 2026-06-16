@@ -57,7 +57,7 @@ jobs:
 
       - name: Verify scan outputs
         run: |
-          echo "=== Trivy ===" && cat ${{ github.workspace }}/app/trivy-image-report.json | head -5 || echo "EMPTY/MISSING"
+          echo "=== Trivy ===" && cat ${{ github.workspace }}/trivy-image-report.json | head -5 || echo "EMPTY/MISSING"
     
       # IaC scan (report only)
       - name: Run Checkov IaC Scan
@@ -104,7 +104,7 @@ jobs:
 
       - name: Verify scan outputs
         run: |
-          echo "=== ZAP ===" && cat ${{ github.workspace }}/app/zap-report.json | head -5 || echo "EMPTY/MISSING"
+          echo "=== ZAP ===" && cat ${{ github.workspace }}/zap-report.json | head -5 || echo "EMPTY/MISSING"
 
       # Push to ECR
       - name: Configure AWS Credentials
