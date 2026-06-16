@@ -95,11 +95,14 @@ jobs:
       - name: Run OWASP ZAP DAST Scan
         working-directory: ${{ github.workspace }}
         run: |
+          chmod 777 ${{ github.workspace }}
           docker run --rm --network appnet \
-          -v ${{ github.workspace }}:/zap/wrk/:rw \
-          ghcr.io/zaproxy/zaproxy:stable \
-          zap-baseline.py -t http://local-app:3000 \
-          -J zap-report.json || true
+            -v ${{ github.workspace }}:/zap/wrk/:rw \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://local-app:3000 \
+            -J zap-report.json \
+            -I || true
+          ls -la ${{ github.workspace }}/zap-report.json || echo "ZAP report still missing"
 
 
       - name: Verify scan outputs

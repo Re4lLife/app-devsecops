@@ -227,6 +227,7 @@ resource "aws_launch_template" "app_lt" {
   name_prefix   = "app-devsecops-lt-"
   image_id      = "ami-0fc5d935ebf8bc3bc" 
   instance_type = "c6i.xlarge"
+  key_name      = "devsecops-key"
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
