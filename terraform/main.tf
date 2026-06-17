@@ -247,23 +247,6 @@ resource "aws_launch_template" "app_lt" {
     aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${split("/", var.image_uri)[0]}
     docker pull ${var.image_uri}
     docker run -d -p ${var.container_port}:5000 --name app ${var.image_uri}
-
-
-    git clone https://github.com/wazuh/wazuh-docker.git /opt/wazuh-docker
-    cd /opt/wazuh-docker
-    git checkout v4.14.5
-    cd single-node
-    docker compose -f generate-indexer-certs.yml run --rm generator
-    docker compose up -d
-
-    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
-    echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
-    apt-get update -y
-    
-    WAZUH_MANAGER="127.0.0.1" apt-get install wazuh-agent -y
-    systemctl daemon-reload
-    systemctl enable wazuh-agent
-    systemctl start wazuh-agent
   EOF
   )
 
