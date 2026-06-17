@@ -229,6 +229,35 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
   secret_string = random_password.db_password.result
 }
 
+
+# Create the IAM Role for the EC2 instances
+resource "aws_iam_role" "ec2_ecr_role" {
+  name = "${var.project}-ec2-ecr-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = { Service = "ec2.amazonaws.com" }
+      }
+    ]
+  })
+}
+
+# Attach the standard AWS managed policy for ECR read access
+resource "aws_iam_role_policy_attachment" "ecr_read" {
+  role       = aws_iam_role.ec2_ecr_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+# Create the Instance Profile that EC2 actually consumes
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "${var.project}-ec2-instance-profile"
+  role = aws_iam_role.ec2_ecr_role.name
+}
+
 # ─── EC2 AUTO SCALING PERIMETER ─────────────────────────────────────────────
 
 resource "aws_launch_template" "app_lt" {
@@ -237,24 +266,63 @@ resource "aws_launch_template" "app_lt" {
   instance_type = "c6i.xlarge"
   key_name      = "devsecops-key"
 
+  iam_instance_profile { name = aws_iam_instance_profile.ec2_profile.name }
+
   user_data = base64encode(<<-EOF
+    #!/bin/bash
     #!/bin/bash
     set -euxo pipefail
     exec > >(tee /var/log/user-data.log) 2>&1
-
+    
+    # ─── SYSTEM CONFIGURATION ───────────────────────────────────────────────────
+    # Expand memory map limits specifically required by Wazuh Indexer (Elasticsearch backend)
     sysctl -w vm.max_map_count=262144
     echo "vm.max_map_count=262144" >> /etc/sysctl.conf
-
+    
+    # ─── DEPENDENCY INSTALLATION ────────────────────────────────────────────────
     apt-get update -y
     apt-get install -y apt-transport-https ca-certificates curl software-properties-common awscli git
+    
+    # Add official Docker repository keys and configuration
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update -y
-    apt-get install -y docker-ce docker-ce-cli containerd.io
-
+    
+    # Explicitly install Docker engine along with the required Compose V2 plugin
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    
+    # ─── APPLICATION DEPLOYMENT ─────────────────────────────────────────────────
+    # Authenticate against your ECR private registry using your instance profile permissions
     aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${split("/", var.image_uri)[0]}
+    
+    # Pull and run your app container mapped perfectly to host port 5000 for your target group
     docker pull ${var.image_uri}
-    docker run -d -p ${var.container_port}:5000 --name app ${var.image_uri}
+    docker run -d -p 5000:5000 --name app ${var.image_uri}
+    
+    # ─── WAZUH MONITORING STACK DEPLOYMENT ──────────────────────────────────────
+    # Clone and stage the centralized Docker repository for the monitoring stack
+    git clone https://github.com/wazuh/wazuh-docker.git /opt/wazuh-docker
+    cd /opt/wazuh-docker
+    git checkout v4.14.5
+    cd single-node
+    
+    # Provision the automated internal cluster certificates and spin up the single-node ecosystem
+    docker compose -f generate-indexer-certs.yml run --rm generator
+    docker compose up -d
+    
+    # ─── LOCAL HOST AGENT PROVISIONING ──────────────────────────────────────────
+    # Import the security signatures and append Wazuh's repository to the local package listings
+    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
+    echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
+    apt-get update -y
+    
+    # Bind the local host monitoring agent to target the running manager loopback profile
+    WAZUH_MANAGER="127.0.0.1" apt-get install wazuh-agent -y
+    
+    # Register and start the background OS monitoring engine
+    systemctl daemon-reload
+    systemctl enable wazuh-agent
+    systemctl start wazuh-agent
   EOF
   )
 
