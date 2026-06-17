@@ -117,6 +117,14 @@ resource "aws_security_group" "app_instances_sg" {
   }
 
   ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow SSH access"
+  }
+
+  ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -258,7 +266,7 @@ resource "aws_launch_template" "app_lt" {
   block_device_mappings {
     device_name = "/dev/sda1"
     ebs {
-      volume_size           = 200
+      volume_size           = 300
       volume_type           = "gp3"
       delete_on_termination = true
     }
