@@ -94,3 +94,5 @@ WAZUH_MANAGER="127.0.0.1" apt-get install -y wazuh-agent
 systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl start wazuh-agent
+
+echo "Done."
