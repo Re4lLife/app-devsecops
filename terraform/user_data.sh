@@ -25,7 +25,7 @@ aws ecr get-login-password --region ${region} | \
 # ─── FETCH DB CREDENTIALS FROM SECRETS MANAGER ───────────────────────────────
 # Instance profile gives us permission - no hardcoded keys
 echo "Polling Secrets Manager for active RDS credentials..."
-for i in {1..70}; do
+for i in {1..100}; do
   SECRET_JSON=$(aws secretsmanager get-secret-value \
     --secret-id "${secret_name}" \
     --region "${region}" \
