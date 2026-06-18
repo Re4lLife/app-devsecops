@@ -35,7 +35,7 @@ for i in {1..70}; do
   sleep 20
 done
 
-if [ -z "${SECRET_JSON:-}" ]; then
+if [ -z "$${SECRET_JSON:-}" ]; then
   echo "CRITICAL: Database initialization payload timed out." >&2
   exit 1
 fi
