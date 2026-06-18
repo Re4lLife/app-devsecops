@@ -24,11 +24,21 @@ aws ecr get-login-password --region ${region} | \
 
 # ─── FETCH DB CREDENTIALS FROM SECRETS MANAGER ───────────────────────────────
 # Instance profile gives us permission - no hardcoded keys
-SECRET_JSON=$(aws secretsmanager get-secret-value \
-  --secret-id "${secret_name}" \
-  --region "${region}" \
-  --query SecretString \
-  --output text)
+echo "Polling Secrets Manager for active RDS credentials..."
+for i in {1..70}; do
+  SECRET_JSON=$(aws secretsmanager get-secret-value \
+    --secret-id "${secret_name}" \
+    --region "${region}" \
+    --query SecretString \
+    --output text 2>/dev/null) && break
+  echo "Secret staging value not populated yet (Attempt $i/30). Retrying in 20s..."
+  sleep 20
+done
+
+if [ -z "${SECRET_JSON:-}" ]; then
+  echo "CRITICAL: Database initialization payload timed out." >&2
+  exit 1
+fi
 
 DB_HOST=$(echo "$SECRET_JSON" | jq -r '.host')
 DB_USER=$(echo "$SECRET_JSON" | jq -r '.username')
