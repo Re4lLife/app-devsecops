@@ -41,7 +41,7 @@ docker pull ${image_uri}
 # ─── VERIFY IMAGE SIGNATURE BEFORE RUNNING ───────────────────────────────────
 COSIGN_VERSION="v2.4.1"
 curl -sSL -o /usr/local/bin/cosign \
-  "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64"
+  "https://github.com/sigstore/cosign/releases/download/$${COSIGN_VERSION}/cosign-linux-amd64"
 chmod +x /usr/local/bin/cosign
 
 cosign verify \
