@@ -52,12 +52,13 @@ jobs:
       # Pull the SBOM attestation directly from the signed image 
       - name: Download SBOM attestation from signed image
         run: |
+          ECR_TOKEN=$(aws ecr get-login-password --region us-east-1)
           cosign download attestation \
+            --registry-username AWS \
+            --registry-password "$ECR_TOKEN" \
             --predicate-type cyclonedx \
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}@${{ steps.prod-digest.outputs.digest }} \
-
-            | jq -r '.payload' | base64 -d | jq -r '.predicate' > ${{ github.workspace }}/sbom.cdx.json
-
+            | jq -r '.payload' | base64 -d | jq -r '.predicate' > ${{ github.workspace }}/sbom.cdx.json    
 
       # Re-evaluate the stored SBOM against today's vulnerability database
       - name: Scan SBOM with Trivy
@@ -67,9 +68,9 @@ jobs:
           scan-ref: ${{ github.workspace }}/sbom.cdx.json
           format: json
           output: ${{ github.workspace }}/daily-trivy-report.json
-          exit-code: 0
+          exit-code: 1
 
-      - name: Verify report was generated
+      - name: Verify generated scan report
         run: |
           wc -c ${{ github.workspace }}/daily-trivy-report.json || echo "Report NOT FOUND"
 
