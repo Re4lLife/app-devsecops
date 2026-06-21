@@ -1,4 +1,4 @@
-name: 2. Application Pipeline
+name: Application Pipeline
 
 on:
   push:
@@ -38,7 +38,6 @@ jobs:
 
       # SCA - Snyk
       - name: Run Snyk Dependency Scan
-        working-directory: ${{ github.workspace }}/app
         run: |
           npm install
           npm install -g snyk
@@ -57,19 +56,29 @@ jobs:
       - name: Run Trivy Container Scan
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          scan-type: 'image'
+          scan-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           format: json
-          output: trivy-image-report.json
+          output: ${{ github.workspace }}/trivy-image-report.json
           exit-code: 0
 
-      # IaC scan
-      - name: Run Checkov IaC Scan
-        working-directory: ${{ github.workspace }}
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}/terraform:/tf \
-            bridgecrew/checkov -d /tf --output json \
-            > ${{ github.workspace }}/checkov-report.json || true
+      # Generate SBOM 
+      - name: Generate SBOM
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          scan-type: 'image'
+          scan-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          format: 'cyclonedx'
+          output: 'sbom.cdx.json'
+
+      # Store as a versioned build artifact - 
+      - name: Upload SBOM as artifact
+        uses: actions/upload-artifact@v4.3.3
+        with:
+          name: sbom-${{ env.IMAGE_TAG }}
+          path: ${{ github.workspace }}/sbom.cdx.json
+          retention-days: 90
+
 
       # DAST
       - name: Start MySQL for DAST
@@ -143,8 +152,17 @@ jobs:
         run: |
           cosign sign --yes \
             $ECR_REGISTRY/$ECR_REPOSITORY@${{ steps.push.outputs.digest }}
-        env:
-          COSIGN_EXPERIMENTAL: "true"
+        
+          
+
+      # Attest the SBOM to the signed image digest
+      - name: Attest SBOM to signed image
+        run: |
+          cosign attest --yes \
+            --predicate ${{ github.workspace }}/sbom.cdx.json \
+            --type cyclonedx \
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}@${{ steps.push.outputs.digest }}
+
 
       # Debug reports
       - name: Debug - List all report files
@@ -154,7 +172,7 @@ jobs:
           wc -c ${{ github.workspace }}/snyk-report.json || echo "Snyk NOT FOUND"
           wc -c ${{ github.workspace }}/trivy-image-report.json || echo "Trivy NOT FOUND"
           wc -c ${{ github.workspace }}/zap-report.json || echo "ZAP NOT FOUND"
-          wc -c ${{ github.workspace }}/checkov-report.json || echo "Checkov NOT FOUND"
+
 
       # Upload to DefectDojo
       - name: Upload Snyk to DefectDojo
@@ -175,14 +193,6 @@ jobs:
             -F "engagement=1" \
             -F "file=@${{ github.workspace }}/trivy-image-report.json" || true
 
-      - name: Upload Checkov to DefectDojo
-        working-directory: ${{ github.workspace }}
-        run: |
-          curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
-            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
-            -F "scan_type=Checkov Scan" \
-            -F "engagement=1" \
-            -F "file=@${{ github.workspace }}/checkov-report.json" || true
 
       - name: Upload ZAP to DefectDojo
         working-directory: ${{ github.workspace }}

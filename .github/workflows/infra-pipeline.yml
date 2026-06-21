@@ -1,4 +1,4 @@
-name: 1. Infrastructure Deployment
+name: Infrastructure Deployment
 
 on:
   push:
@@ -35,8 +35,18 @@ jobs:
 
       - name: Run Checkov IaC Scan (report only - does not block)
         run: |
-          docker run --rm -v $(pwd):/tf bridgecrew/checkov \
-            -d /tf --output json > checkov-report.json || true
+          docker run --rm -v ${{ github.workspace }}/terraform:/tf bridgecrew/checkov \
+            -d /tf --output json > ${{ github.workspace }}/checkov-report.json || true
+
+
+      
+      # Debug reports
+      - name: Debug - List all report files
+        working-directory: ${{ github.workspace }}
+        run: |
+          ls -la ${{ github.workspace }}/
+          wc -c ${{ github.workspace }}/checkov-report.json || echo "Checkov NOT FOUND"
+
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -51,7 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
-          path: terraform/tfplan
+          path: tfplan
 
       - name: Terraform Apply or Destroy
         run: |
@@ -60,3 +70,13 @@ jobs:
           else
             terraform apply -auto-approve tfplan
           fi
+
+
+      - name: Upload Checkov to DefectDojo
+        working-directory: ${{ github.workspace }}
+        run: |
+          curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+            -F "scan_type=Checkov Scan" \
+            -F "engagement=1" \
+            -F "file=@${{ github.workspace }}/checkov-report.json" || true

@@ -1,0 +1,80 @@
+name: Daily SBOM Vulnerability Audit
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # every 24 hours at midnight UTC
+  workflow_dispatch:
+
+env:
+  ECR_REGISTRY: 437797167825.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: vulnerable-app
+
+permissions:
+  contents: read
+  actions: read  # required to download artifacts from the most recent app-pipeline run
+
+jobs:
+  sbom-continuous-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Find the digest currently running in production (the "latest" tag)
+      - name: Get production image digest
+        id: prod-digest
+        run: |
+          DIGEST=$(aws ecr describe-images \
+            --repository-name $ECR_REPOSITORY \
+            --image-ids imageTag=latest \
+            --query 'imageDetails[0].imageDigest' \
+            --output text \
+            --region us-east-1)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+      # Pull the SBOM attestation directly from the signed image - no need to store SBOM separately
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v2.4.1
+
+      - name: Download SBOM attestation from signed image
+        run: |
+          cosign download attestation \
+            --type cyclonedx \
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}@${{ steps.prod-digest.outputs.digest }} \
+
+            | jq -r '.payload' | base64 -d | jq -r '.predicate' > ${{ github.workspace }}/sbom.cdx.json
+
+
+      # Re-evaluate the stored SBOM against today's vulnerability database
+      - name: Scan SBOM with Trivy
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          scan-type: sbom
+          scan-ref: ${{ github.workspace }}/sbom.cdx.json
+          format: json
+          output: ${{ github.workspace }}/daily-trivy-report.json
+          exit-code: 0
+
+      - name: Verify report was generated
+        run: |
+          wc -c ${{ github.workspace }}/daily-trivy-report.json || echo "Report NOT FOUND"
+
+      # Findings go to DefectDojo 
+      - name: Upload daily findings to DefectDojo
+        run: |
+          curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/reimport-scan/" \
+            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_TOKEN }}" \
+            -F "scan_type=Trivy Scan" \
+            -F "engagement=1" \
+            -F "file=@${{ github.workspace }}/daily-trivy-report.json" || true
