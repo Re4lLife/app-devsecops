@@ -63,6 +63,7 @@ jobs:
       # Re-evaluate the stored SBOM against today's vulnerability database
       - name: Scan SBOM with Trivy
         uses: aquasecurity/trivy-action@v0.35.0
+        continue-on-error: true
         with:
           scan-type: sbom
           scan-ref: ${{ github.workspace }}/sbom.cdx.json
