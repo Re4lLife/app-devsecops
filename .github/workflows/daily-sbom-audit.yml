@@ -50,7 +50,7 @@ jobs:
       - name: Download SBOM attestation from signed image
         run: |
           cosign download attestation \
-            --type cyclonedx \
+            --predicate-type cyclonedx \
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}@${{ steps.prod-digest.outputs.digest }} \
 
             | jq -r '.payload' | base64 -d | jq -r '.predicate' > ${{ github.workspace }}/sbom.cdx.json
