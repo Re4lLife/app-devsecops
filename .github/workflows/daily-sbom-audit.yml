@@ -43,10 +43,13 @@ jobs:
             --region us-east-1)
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
-      # Pull the SBOM attestation directly from the signed image - no need to store SBOM separately
+      
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v2.4.1
+        uses: sigstore/cosign-installer@v3.5.0
+        with:
+          cosign-release: 'v2.2.3'
 
+      # Pull the SBOM attestation directly from the signed image 
       - name: Download SBOM attestation from signed image
         run: |
           cosign download attestation \
