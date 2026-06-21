@@ -1,6 +1,6 @@
 # VulnerableApp (DevSecOps Pipeline)
 
-A modern full-stack web application used as a baseline for implementing automated security controls, continuous integration, and infrastructure-as-code hardening. 
+A modern full-stack web application used as a baseline for implementing automated security controls in CI/CD pipeline covering SAST, SCA, DAST, docker image and IaC hardening
 
 ## 🚀 Architecture & Tech Stack
 
